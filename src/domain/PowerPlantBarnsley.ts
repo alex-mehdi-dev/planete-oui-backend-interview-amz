@@ -27,16 +27,14 @@ export default class PowerPlantBarnsley extends PowerPlant {
   }
 
   static transformBarnselyMeasureToMeasure(barnselyMeasures: BarnselyMeasure[]): Measure[] {
-    const measures: Measure[] = [];
-    barnselyMeasures.forEach((barnselyMeasure) => {
-      measures.push({
-        start: barnselyMeasure.start_time,
-        end: barnselyMeasure.end_time,
-        power: barnselyMeasure.value,
-      });
-    });
-
-    return measures;
+    return barnselyMeasures.map(
+      (barnselyMeasure) =>
+        ({
+          start: barnselyMeasure.start_time,
+          end: barnselyMeasure.end_time,
+          power: barnselyMeasure.value,
+        } as Measure),
+    );
   }
 }
 

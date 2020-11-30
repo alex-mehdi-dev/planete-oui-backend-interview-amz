@@ -4,9 +4,7 @@ import { reportCriticalError, reportCriticalErrorBadConf } from '../utils/Logger
 import DateChecker from '../utils/DateChecker';
 import OutputWritter from '../utils/OutputWritter';
 import PowerPlant from '../domain/PowerPlant';
-import PowerPlantBarnsley from '../domain/PowerPlantBarnsley';
-import PowerPlantHawes from '../domain/PowerPlantHawes';
-import PowerPlantHounslow from '../domain/PowerPlantHounslow';
+import PowerPlantFactory from '../domain/PowerPlantFactory';
 
 export const CMD_GET_TOTAL_POWER = 'get-total-power';
 export const CMD_GET_TOTAL_POWER_EXAMPLE = `${CMD_GET_TOTAL_POWER} --from 01-01-2020 --to 02-01-2020 --format json`;
@@ -20,20 +18,13 @@ export default class GetTotalPower {
       return;
     }
 
-    // If we need to add a new power plant:
-    // 1. Add a new class which inherits from PowerPlant.
-    // 2. Add its corresponding environment variable in the .env.example Only
-    //    the time step and the name are required by the PowerPlant class.
-    // 3. Instantiate it here. The generic algorithm will take care of
-    //    aggregating the data from all the power plants.
-    const powerPlants: PowerPlant[] = [
-      new PowerPlantHawes(),
-      new PowerPlantBarnsley(),
-      new PowerPlantHounslow(),
-    ];
-
     try {
-      const measures = await this.aggregateTotalPower(startingDate, endingDate, powerPlants);
+      const powerPlantFactory = new PowerPlantFactory();
+      const measures = await this.aggregateTotalPower(
+        startingDate,
+        endingDate,
+        powerPlantFactory.getPowerPlants(),
+      );
       OutputWritter.writeOutput(measures, format);
     } catch (err) {
       // The error must have been already logged.
@@ -52,14 +43,14 @@ export default class GetTotalPower {
       allMeasures.push(powerPlant.getMeasures(startingDate, endingDate, minTimeStep));
     });
 
-    return Promise.all(allMeasures)
-      .then((allMeasuresFetched) => {
-        this.checkAllMeasuresHaveSameSize(powerPlants, allMeasuresFetched);
-        return this.aggregateMeasuresByPower(allMeasuresFetched.flat());
-      })
-      .catch((err) => {
-        throw Error(err);
-      });
+    try {
+      let allMeasuresFetched: Measure[][] = [];
+      allMeasuresFetched = await Promise.all(allMeasures);
+      this.checkAllMeasuresHaveSameSize(powerPlants, allMeasuresFetched);
+      return this.aggregateMeasuresByPower(allMeasuresFetched.flat());
+    } catch (err) {
+      throw Error(err);
+    }
   }
 
   static getMinTimeStep(powerPlants: PowerPlant[]): number {
@@ -79,9 +70,8 @@ export default class GetTotalPower {
   static checkAllMeasuresHaveSameSize(powerPlants: PowerPlant[], allMeasures: Measure[][]): void {
     const measureSizeReducer = (accumulator: number, measures: Measure[]) =>
       accumulator + measures.length;
-    if (
-      !(allMeasures.reduce(measureSizeReducer, 0) / allMeasures.length === allMeasures[0].length)
-    ) {
+    const totalNbOfMeasures = allMeasures.reduce(measureSizeReducer, 0);
+    if (!(totalNbOfMeasures / powerPlants.length === allMeasures[0].length)) {
       let message = `Impossible to aggregate the measures: the number of measures returned by the power plants or smooth after correction are not the sames:\n`;
       allMeasures.forEach((powerPlantMeasures, powerPlantIndex) => {
         message += `${powerPlants[powerPlantIndex].getName()} number of measures = ${
