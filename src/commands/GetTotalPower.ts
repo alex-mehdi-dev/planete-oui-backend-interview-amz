@@ -43,14 +43,9 @@ export default class GetTotalPower {
       allMeasures.push(powerPlant.getMeasures(startingDate, endingDate, minTimeStep));
     });
 
-    try {
-      let allMeasuresFetched: Measure[][] = [];
-      allMeasuresFetched = await Promise.all(allMeasures);
-      this.checkAllMeasuresHaveSameSize(powerPlants, allMeasuresFetched);
-      return this.aggregateMeasuresByPower(allMeasuresFetched.flat());
-    } catch (err) {
-      throw Error(err);
-    }
+    const allMeasuresFetched = await Promise.all(allMeasures);
+    this.checkAllMeasuresHaveSameSize(powerPlants, allMeasuresFetched);
+    return this.aggregateMeasuresByPower(allMeasuresFetched.flat());
   }
 
   static getMinTimeStep(powerPlants: PowerPlant[]): number {
@@ -92,13 +87,12 @@ export default class GetTotalPower {
       return powerAccumulator + measure.power;
     };
 
-    const aggregatedMeasuresByPower: Measure[] = [];
-    measuresGroupedByBoundsArr.forEach((measuresGroup) => {
-      aggregatedMeasuresByPower.push({
+    const aggregatedMeasuresByPower = Array.from(measuresGroupedByBoundsArr, (measuresGroup) => {
+      return {
         start: measuresGroup[0].start,
         end: measuresGroup[0].end,
         power: measuresGroup.reduce(powerReducer, 0),
-      });
+      };
     });
 
     return aggregatedMeasuresByPower.sort((m1: Measure, m2: Measure) => {
